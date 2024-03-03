@@ -1,8 +1,12 @@
 import express from "express";
 import logger from "morgan";
+import dotenv from "dotenv";
+import { createClient } from "@libsql/client";
 
 import { Server } from "socket.io";
 import { createServer } from "node:http";
+
+dotenv.config();
 
 const PORT = process.env.PORT ?? 3000;
 
@@ -13,11 +17,33 @@ const io = new Server(server, {
   connectionStateRecovery: {},
 });
 
+const db = createClient({
+  url: process.env.API_URL,
+  authToken: process.env.API_TOKEN,
+});
+
+await db.execute(`
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT
+  );
+`);
+
 io.on("connection", (socket) => {
   console.log("a user connected");
 
-  socket.on("chat message", (msg) => {
-    io.emit("chat message", msg);
+  socket.on("chat message", async (msg) => {
+    let result;
+    try {
+      result = await db.execute({
+        sql: `INSERT INTO messages (content) VALUES (:msg);`,
+        args: { msg },
+      });
+    } catch (error) {
+      console.log(error);
+      return;
+    }
+    io.emit("chat message", msg, result.lastInsertRowid.toString());
   });
 
   socket.on("disconnect", () => {
