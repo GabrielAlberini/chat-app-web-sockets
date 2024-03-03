@@ -9,6 +9,8 @@ import { createServer } from "node:http";
 dotenv.config();
 
 const PORT = process.env.PORT ?? 3000;
+const URL = process.env.API_URL;
+const API_TOKEN = process.env.API_TOKEN;
 
 const app = express();
 const server = createServer(app);
@@ -18,8 +20,8 @@ const io = new Server(server, {
 });
 
 const db = createClient({
-  url: process.env.API_URL,
-  authToken: process.env.API_TOKEN,
+  url: URL,
+  authToken: API_TOKEN,
 });
 
 await db.execute(`
@@ -29,7 +31,7 @@ await db.execute(`
   );
 `);
 
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("a user connected");
 
   socket.on("chat message", async (msg) => {
@@ -49,6 +51,19 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("an user has disconnected");
   });
+
+  if (!socket.recovered) {
+    try {
+      const result = await db.execute({
+        sql: "SELECT id, content FROM messages WHERE id > ?",
+        args: [socket.handshake.auth.serverOffset ?? 0],
+      });
+
+      result.rows.forEach((row) => {
+        socket.emit("chat message", row.content, row.id.toString());
+      });
+    } catch (error) {}
+  }
 });
 
 app.use(logger("dev"));
