@@ -13,6 +13,8 @@ const URL = process.env.API_URL;
 const API_TOKEN = process.env.API_TOKEN;
 
 const app = express();
+app.use(express.static("./client"));
+
 const server = createServer(app);
 const io = new Server(server, {
   //Recuperar msj cuando se corta la conexión
@@ -69,7 +71,9 @@ io.on("connection", async (socket) => {
           row.username
         );
       });
-    } catch (error) {}
+    } catch (e) {
+      console.error(e);
+    }
   }
 });
 
